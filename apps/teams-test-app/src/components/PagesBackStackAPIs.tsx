@@ -3,7 +3,7 @@ import React, { ReactElement } from 'react';
 
 import { ApiWithoutInput } from './utils';
 import { ApiContainer } from './utils/ApiContainer';
-import { getTestBackCompat } from './utils/getTestBackCompat';
+import { isTestBackCompat } from './utils/isTestBackCompat';
 
 const NavigateBack = (): React.ReactElement =>
   ApiWithoutInput({
@@ -62,18 +62,18 @@ const PagesBackStackAPIs = (): ReactElement => {
     setAddStatesValue('total States: ' + newNumStates);
   }, [totalStates, setTotalStates, setAddStatesValue]);
 
-  const registerBackButtonHandlerHelper = (): boolean => {
-    if (totalStates > 0) {
-      const newNumStates = totalStates - 1;
-      setTotalStates(newNumStates);
-      setRegisterBackButtonHandlerValue('back button clicked. total remaining state: ' + newNumStates);
-      return true;
-    }
-    return false;
-  };
-
   const onRegisterBackButtonHandler = React.useCallback(() => {
-    if (getTestBackCompat()) {
+    const registerBackButtonHandlerHelper = (): boolean => {
+      if (totalStates > 0) {
+        const newNumStates = totalStates - 1;
+        setTotalStates(newNumStates);
+        setRegisterBackButtonHandlerValue('back button clicked. total remaining state: ' + newNumStates);
+        return true;
+      }
+      return false;
+    };
+
+    if (isTestBackCompat()) {
       registerBackButtonHandler((): boolean => {
         return registerBackButtonHandlerHelper();
       });
@@ -84,7 +84,7 @@ const PagesBackStackAPIs = (): ReactElement => {
     }
 
     setRegisterBackButtonHandlerValue('total States: ' + totalStates);
-  }, [totalStates, setTotalStates, setRegisterBackButtonHandlerValue]);
+  }, [totalStates]);
 
   return (
     <>

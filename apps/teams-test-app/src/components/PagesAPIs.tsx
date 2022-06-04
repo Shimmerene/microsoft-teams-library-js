@@ -3,12 +3,13 @@ import {
   FrameInfo,
   navigateCrossDomain,
   pages,
+  registerFocusEnterHandler,
   registerFullScreenHandler,
   returnFocus,
   setFrameContext,
   settings,
   shareDeepLink,
-  teamsCore,
+  ShareDeepLinkParameters,
 } from '@microsoft/teams-js';
 import React, { ReactElement } from 'react';
 
@@ -83,22 +84,38 @@ const NavigateToApp = (): React.ReactElement =>
   });
 
 const ShareDeepLink = (): ReactElement =>
-  ApiWithTextInput<DeepLinkParameters>({
+  ApiWithTextInput<DeepLinkParameters & ShareDeepLinkParameters>({
     name: 'core.shareDeepLink',
     title: 'Share Deeplink',
     onClick: {
       validateInput: input => {
-        if (!input.subEntityId || !input.subEntityLabel) {
-          throw new Error('subEntityId and subEntityLabel are required.');
+        if (!((input.subEntityId && input.subEntityLabel) || (input.subPageId && input.subPageLabel))) {
+          throw new Error('subPageId and subPageLabel OR subEntityId and subEntityLabel are required.');
         }
       },
       submit: {
         withPromise: async input => {
-          await pages.shareDeepLink(input);
+          if (input.subEntityId && input.subEntityLabel) {
+            await pages.shareDeepLink({
+              subPageId: input.subEntityId,
+              subPageLabel: input.subEntityLabel,
+              subPageWebUrl: input.subEntityWebUrl,
+            });
+          } else {
+            await pages.shareDeepLink(input);
+          }
           return 'called shareDeepLink';
         },
         withCallback: (input, setResult) => {
-          shareDeepLink(input);
+          if (input.subEntityId && input.subEntityLabel) {
+            shareDeepLink(input);
+          } else {
+            shareDeepLink({
+              subEntityId: input.subPageId,
+              subEntityLabel: input.subPageLabel,
+              subEntityWebUrl: input.subPageWebUrl,
+            });
+          }
           setResult('called shareDeepLink');
         },
       },
@@ -126,12 +143,21 @@ const RegisterFocusEnterHandler = (): React.ReactElement =>
   ApiWithoutInput({
     name: 'registerFocusEnterHandler',
     title: 'Register On Focus Enter Handler',
-    onClick: async setResult => {
-      teamsCore.registerFocusEnterHandler(navigateForward => {
-        setResult('successfully called with navigateForward:' + navigateForward);
-        return true;
-      });
-      return 'registered';
+    onClick: {
+      withPromise: async setResult => {
+        pages.registerFocusEnterHandler(navigateForward => {
+          setResult('successfully called with navigateForward:' + navigateForward);
+          return true;
+        });
+        return 'registered';
+      },
+      withCallback: setResult => {
+        registerFocusEnterHandler(navigateForward => {
+          setResult('successfully called with navigateForward:' + navigateForward);
+          return true;
+        });
+        setResult('registered');
+      },
     },
   });
 

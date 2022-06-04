@@ -1,8 +1,9 @@
-import { TaskInfo } from '../../src/public/interfaces';
+import { app } from '../../src/public/app';
 import { TaskModuleDimension } from '../../src/public/constants';
+import { FrameContexts } from '../../src/public/constants';
+import { TaskInfo } from '../../src/public/interfaces';
 import { tasks } from '../../src/public/tasks';
 import { Utils } from '../utils';
-import { app } from '../../src/public/app';
 
 describe('tasks', () => {
   // Use to send a mock message from the app.
@@ -24,235 +25,260 @@ describe('tasks', () => {
   });
 
   describe('startTask', () => {
+    const allowedContexts = [FrameContexts.content, FrameContexts.sidePanel, FrameContexts.meetingStage];
+
     it('should not allow calls before initialization', () => {
       const taskInfo: TaskInfo = {};
       expect(() => tasks.startTask(taskInfo)).toThrowError('The library has not yet been initialized');
     });
 
-    it('should not allow calls from settings context', async () => {
-      await utils.initializeWithContext('settings');
+    Object.values(FrameContexts).forEach(context => {
+      if (allowedContexts.some(allowedContexts => allowedContexts === context)) {
+        it(`should pass along the taskInfo correctly when card is specified. ${context} context`, async () => {
+          await utils.initializeWithContext(context);
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.startTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["content","sidePanel","meetingStage"]. Current context: "settings".',
-      );
-    });
+          const taskInfo: TaskInfo = {
+            card: 'someCard',
+            fallbackUrl: 'someFallbackUrl',
+            height: TaskModuleDimension.Large,
+            width: TaskModuleDimension.Large,
+            title: 'someTitle',
+            url: 'someUrl',
+            completionBotId: 'someCompletionBotId',
+          };
 
-    it('should not allow calls from authentication context', async () => {
-      await utils.initializeWithContext('authentication');
+          tasks.startTask(taskInfo, () => {
+            return;
+          });
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.startTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["content","sidePanel","meetingStage"]. Current context: "authentication".',
-      );
-    });
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
+          expect(startTaskMessage).not.toBeNull();
+          expect(startTaskMessage.args).toEqual([taskInfo]);
+        });
 
-    it('should not allow calls from remove context', async () => {
-      await utils.initializeWithContext('remove');
+        it(`should pass along the taskInfo correctly when URL is not specified. ${context} context`, async () => {
+          await utils.initializeWithContext(context);
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.startTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["content","sidePanel","meetingStage"]. Current context: "remove".',
-      );
-    });
+          const taskInfo: TaskInfo = {
+            height: TaskModuleDimension.Large,
+            width: TaskModuleDimension.Large,
+          };
 
-    it('should not allow calls from task context', async () => {
-      await utils.initializeWithContext('task');
+          tasks.startTask(taskInfo, () => {
+            return;
+          });
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.startTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["content","sidePanel","meetingStage"]. Current context: "task".',
-      );
-    });
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
+          expect(startTaskMessage).not.toBeNull();
+          expect(startTaskMessage.args).toEqual([taskInfo]);
+        });
 
-    it('should pass along entire TaskInfo parameter in sidePanel context', async () => {
-      await utils.initializeWithContext('sidePanel');
+        it(`should pass along the taskInfo correctly when completionBotid is specified. context: ${context}`, async () => {
+          await utils.initializeWithContext(context);
 
-      const taskInfo: TaskInfo = {
-        card: 'someCard',
-        fallbackUrl: 'someFallbackUrl',
-        height: TaskModuleDimension.Large,
-        width: TaskModuleDimension.Large,
-        title: 'someTitle',
-        url: 'someUrl',
-        completionBotId: 'someCompletionBotId',
-      };
+          const taskInfo: TaskInfo = {
+            fallbackUrl: 'someFallbackUrl',
+            height: TaskModuleDimension.Large,
+            width: TaskModuleDimension.Large,
+            title: 'someTitle',
+            url: 'someUrl',
+            completionBotId: 'someCompletionBotId',
+          };
 
-      tasks.startTask(taskInfo, () => {
-        return;
-      });
+          tasks.startTask(taskInfo, () => {
+            return;
+          });
 
-      const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
-      expect(startTaskMessage).not.toBeNull();
-      expect(startTaskMessage.args).toEqual([taskInfo]);
-    });
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
+          expect(startTaskMessage).not.toBeNull();
+          expect(startTaskMessage.args).toEqual([taskInfo]);
+        });
 
-    it('should pass along entire TaskInfo parameter in content', async () => {
-      await utils.initializeWithContext('content');
+        it(`should pass along the taskInfo correctly when URL is provided without Bot. context: ${context}`, async () => {
+          await utils.initializeWithContext(context);
 
-      const taskInfo: TaskInfo = {
-        card: 'someCard',
-        fallbackUrl: 'someFallbackUrl',
-        height: TaskModuleDimension.Large,
-        width: TaskModuleDimension.Large,
-        title: 'someTitle',
-        url: 'someUrl',
-        completionBotId: 'someCompletionBotId',
-      };
+          const taskInfo: TaskInfo = {
+            fallbackUrl: 'someFallbackUrl',
+            height: TaskModuleDimension.Large,
+            width: TaskModuleDimension.Large,
+            title: 'someTitle',
+            url: 'someUrl',
+          };
 
-      tasks.startTask(taskInfo, () => {
-        return;
-      });
+          tasks.startTask(taskInfo, () => {
+            return;
+          });
 
-      const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
-      expect(startTaskMessage).not.toBeNull();
-      expect(startTaskMessage.args).toEqual([taskInfo]);
-    });
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
+          expect(startTaskMessage).not.toBeNull();
+          expect(startTaskMessage.args).toEqual([taskInfo]);
+        });
 
-    it('should invoke callback with result', async () => {
-      await utils.initializeWithContext('content');
+        it(`should Provide default Size if taskInfo doesn't have length or width. ${context} context`, async () => {
+          await utils.initializeWithContext(context);
 
-      let callbackCalled = false;
-      const taskInfo: TaskInfo = {};
-      tasks.startTask(taskInfo, (err, result) => {
-        expect(err).toBeNull();
-        expect(result).toBe('someResult');
-        callbackCalled = true;
-      });
+          const taskInfo: TaskInfo = {
+            fallbackUrl: 'someFallbackUrl',
+            height: TaskModuleDimension.Large,
+            url: 'someUrl',
+            card: 'someCard',
+          };
 
-      const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
-      expect(startTaskMessage).not.toBeNull();
-      utils.respondToMessage(startTaskMessage, null, 'someResult');
-      expect(callbackCalled).toBe(true);
-    });
+          tasks.startTask(taskInfo, () => {
+            return;
+          });
+          const taskInfoWithSize = tasks.getDefaultSizeIfNotProvided(taskInfo);
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
 
-    it('should invoke callback with error', async () => {
-      await utils.initializeWithContext('content');
+          expect(startTaskMessage).not.toBeNull();
+          expect(startTaskMessage.args).toEqual([taskInfo]);
+          expect(startTaskMessage.args).toEqual([taskInfoWithSize]);
+        });
 
-      let callbackCalled = false;
-      const taskInfo: TaskInfo = {};
-      tasks.startTask(taskInfo, (err, result) => {
-        expect(err).toBe('someError');
-        expect(result).toBeUndefined();
-        callbackCalled = true;
-      });
+        it(`should invoke callback with result. context: ${context}`, async () => {
+          await utils.initializeWithContext(context);
 
-      const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
-      expect(startTaskMessage).not.toBeNull();
-      utils.respondToMessage(startTaskMessage, 'someError');
-      expect(callbackCalled).toBe(true);
+          let callbackCalled = false;
+          const taskInfo: TaskInfo = {};
+          tasks.startTask(taskInfo, (err, result) => {
+            expect(err).toBeNull();
+            expect(result).toBe('someResult');
+            callbackCalled = true;
+          });
+
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
+          expect(startTaskMessage).not.toBeNull();
+          utils.respondToMessage(startTaskMessage, null, 'someResult');
+          expect(callbackCalled).toBe(true);
+        });
+
+        it(`should invoke callback with error. context: ${context}`, async () => {
+          await utils.initializeWithContext(context);
+
+          let callbackCalled = false;
+          const taskInfo: TaskInfo = {};
+          tasks.startTask(taskInfo, (err, result) => {
+            expect(err).toBe('someError');
+            expect(result).toBeUndefined();
+            callbackCalled = true;
+          });
+
+          const startTaskMessage = utils.findMessageByFunc('tasks.startTask');
+          expect(startTaskMessage).not.toBeNull();
+          utils.respondToMessage(startTaskMessage, 'someError');
+          expect(callbackCalled).toBe(true);
+        });
+      } else {
+        it(`should not allow calls from ${context} context`, async () => {
+          await utils.initializeWithContext(context);
+          const taskInfo: TaskInfo = {};
+          expect(() => tasks.startTask(taskInfo)).toThrowError(
+            `This call is only allowed in following contexts: ${JSON.stringify(
+              allowedContexts,
+            )}. Current context: "${context}".`,
+          );
+        });
+      }
     });
   });
 
   describe('updateTask', () => {
+    const allowedContexts = [
+      FrameContexts.content,
+      FrameContexts.sidePanel,
+      FrameContexts.task,
+      FrameContexts.meetingStage,
+    ];
     it('should not allow calls before initialization', () => {
-      // tslint:disable-next-line:no-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(() => tasks.updateTask({} as any)).toThrowError('The library has not yet been initialized');
     });
 
-    it('should not allow calls from content context', async () => {
-      await utils.initializeWithContext('content');
+    Object.values(FrameContexts).forEach(context => {
+      if (allowedContexts.some(allowedContexts => allowedContexts === context)) {
+        it(`should successfully pass taskInfo in context: ${JSON.stringify(context)}`, async () => {
+          await utils.initializeWithContext(context);
+          const taskInfo = { width: 10, height: 10 };
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.updateTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "content".',
-      );
-    });
+          tasks.updateTask(taskInfo);
+          const updateTaskMessage = utils.findMessageByFunc('tasks.updateTask');
+          expect(updateTaskMessage).not.toBeNull();
+          expect(updateTaskMessage.args).toEqual([taskInfo]);
+        });
 
-    it('should not allow calls from sidePanel context', async () => {
-      await utils.initializeWithContext('sidePanel');
+        it(`should successfully pass the default info if height/width is missing: ${JSON.stringify(
+          context,
+        )}`, async () => {
+          await utils.initializeWithContext(context);
+          const taskInfo = { width: 10 };
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.updateTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "sidePanel".',
-      );
-    });
+          tasks.updateTask(taskInfo);
+          const taskInfoWithSize = tasks.getDefaultSizeIfNotProvided(taskInfo);
+          const updateTaskMessage = utils.findMessageByFunc('tasks.updateTask');
+          expect(updateTaskMessage).not.toBeNull();
+          expect(updateTaskMessage.args).toEqual([taskInfo]);
+          expect(updateTaskMessage.args).toEqual([taskInfoWithSize]);
+        });
 
-    it('should not allow calls from meetingStage context', async () => {
-      await utils.initializeWithContext('meetingStage');
+        it(`should throw an error if extra properties are provided context: ${JSON.stringify(context)}`, async () => {
+          await utils.initializeWithContext(context);
+          const taskInfo = { width: 10, height: 10, title: 'anything' };
 
-      const taskInfo: TaskInfo = {};
-      expect(() => tasks.updateTask(taskInfo)).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "meetingStage".',
-      );
-    });
-
-    it('should successfully pass taskInfo in task context', async () => {
-      await utils.initializeWithContext('task');
-      const taskInfo = { width: 10, height: 10 };
-
-      tasks.updateTask(taskInfo);
-
-      const updateTaskMessage = utils.findMessageByFunc('tasks.updateTask');
-      expect(updateTaskMessage).not.toBeNull();
-      expect(updateTaskMessage.args).toEqual([taskInfo]);
-    });
-
-    it('should throw an error if extra properties are provided', async () => {
-      await utils.initializeWithContext('task');
-      const taskInfo = { width: 10, height: 10, title: 'anything' };
-
-      expect(() => tasks.updateTask(taskInfo)).toThrowError(
-        'resize requires a dialogInfo argument containing only width and height',
-      );
+          expect(() => tasks.updateTask(taskInfo)).toThrowError(
+            'resize requires a TaskInfo argument containing only width and height',
+          );
+        });
+      } else {
+        it(`should not allow calls from ${context} context`, async () => {
+          await utils.initializeWithContext(context);
+          const taskInfo: TaskInfo = {};
+          expect(() => tasks.updateTask(taskInfo)).toThrowError(
+            `This call is only allowed in following contexts: ${JSON.stringify(
+              allowedContexts,
+            )}. Current context: "${context}".`,
+          );
+        });
+      }
     });
   });
 
   describe('submitTask', () => {
+    const allowedContexts = [
+      FrameContexts.content,
+      FrameContexts.sidePanel,
+      FrameContexts.task,
+      FrameContexts.meetingStage,
+    ];
     it('should not allow calls before initialization', () => {
       expect(() => tasks.submitTask()).toThrowError('The library has not yet been initialized');
     });
 
-    it('should not allow calls from settings context', async () => {
-      await utils.initializeWithContext('settings');
-
-      expect(() => tasks.submitTask()).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "settings".',
-      );
+    Object.values(FrameContexts).forEach(context => {
+      if (!allowedContexts.some(allowedContexts => allowedContexts === context)) {
+        it(`should not allow calls from ${context} context`, async () => {
+          await utils.initializeWithContext(context);
+          const taskInfo: TaskInfo = {};
+          expect(() => tasks.submitTask(taskInfo)).toThrowError(
+            `This call is only allowed in following contexts: ${JSON.stringify(
+              allowedContexts,
+            )}. Current context: "${context}".`,
+          );
+        });
+      }
     });
 
-    it('should not allow calls from content context', async () => {
-      await utils.initializeWithContext('content');
+    it('should successfully pass result and appIds parameters when called from sidePanel context', () => {
+      utils.initializeWithContext('sidePanel');
 
-      expect(() => tasks.submitTask()).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "content".',
-      );
-    });
+      tasks.submitTask('someResult', ['someAppId', 'someOtherAppId']);
 
-    it('should not allow calls from sidePanel context', async () => {
-      await utils.initializeWithContext('sidePanel');
-
-      expect(() => tasks.submitTask()).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "sidePanel".',
-      );
-    });
-
-    it('should not allow calls from meetingStage context', async () => {
-      await utils.initializeWithContext('meetingStage');
-
-      expect(() => tasks.submitTask()).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "meetingStage".',
-      );
-    });
-
-    it('should not allow calls from authentication context', async () => {
-      await utils.initializeWithContext('authentication');
-
-      expect(() => tasks.submitTask()).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "authentication".',
-      );
-    });
-
-    it('should not allow calls from remove context', async () => {
-      await utils.initializeWithContext('remove');
-
-      expect(() => tasks.submitTask()).toThrowError(
-        'This call is only allowed in following contexts: ["task"]. Current context: "remove".',
-      );
+      const submitTaskMessage = utils.findMessageByFunc('tasks.completeTask');
+      expect(submitTaskMessage).not.toBeNull();
+      expect(submitTaskMessage.args).toEqual(['someResult', ['someAppId', 'someOtherAppId']]);
     });
 
     it('should successfully pass result and appIds parameters when called from task context', async () => {
-      await utils.initializeWithContext('task');
+      await utils.initializeWithContext(FrameContexts.task);
 
       tasks.submitTask('someResult', ['someAppId', 'someOtherAppId']);
 
@@ -262,7 +288,7 @@ describe('tasks', () => {
     });
 
     it('should handle a single string passed as appIds parameter', async () => {
-      await utils.initializeWithContext('task');
+      await utils.initializeWithContext(FrameContexts.task);
 
       tasks.submitTask('someResult', 'someAppId');
 

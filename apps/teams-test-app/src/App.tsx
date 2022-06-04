@@ -16,13 +16,13 @@ import LogAPIs from './components/LogsAPIs';
 import MailAPIs from './components/MailAPIs';
 import MediaAPIs from './components/MediaAPIs';
 import MeetingAPIs from './components/MeetingAPIs';
+import MenusAPIs from './components/MenusAPIs';
 import PagesAPIs from './components/PagesAPIs';
 import PagesAppButtonAPIs from './components/PagesAppButtonAPIs';
 import PagesBackStackAPIs from './components/PagesBackStackAPIs';
 import PagesConfigAPIs from './components/PagesConfigAPIs';
 import PagesTabsAPIs from './components/PagesTabsAPIs';
 import PeopleAPIs from './components/PeopleAPIs';
-import BotAPIs from './components/privateApis/BotAPIs';
 import ChatAPIs from './components/privateApis/ChatAPIs';
 import FilesAPIs from './components/privateApis/FilesAPIs';
 import FullTrustAPIs from './components/privateApis/FullTrustAPIs';
@@ -33,14 +33,15 @@ import PrivateAPIs from './components/privateApis/PrivateAPIs';
 import TeamsAPIs from './components/privateApis/TeamsAPIs';
 import RemoteCameraAPIs from './components/RemoteCameraAPIs';
 import SharingAPIs from './components/SharingAPIs';
+import StageViewAPIs from './components/StageViewAPIs';
 import TeamsCoreAPIs from './components/TeamsCoreAPIs';
-import { getTestBackCompat } from './components/utils/getTestBackCompat';
+import { isTestBackCompat } from './components/utils/isTestBackCompat';
 
 const urlParams = new URLSearchParams(window.location.search);
 
 // This is added for custom initialization when app can be initialized based upon a trigger/click.
 if (!urlParams.has('customInit') || !urlParams.get('customInit')) {
-  if (getTestBackCompat()) {
+  if (isTestBackCompat()) {
     initialize();
   } else {
     app.initialize();
@@ -55,7 +56,7 @@ if (
 ) {
   console.info('Not calling appInitialization because part of App Initialization Test run');
 } else {
-  if (getTestBackCompat()) {
+  if (isTestBackCompat()) {
     appInitialization.notifyAppLoaded();
     appInitialization.notifySuccess();
   } else {
@@ -106,7 +107,6 @@ const App = (): ReactElement => {
       <AppInstallDialogAPIs />
       <AuthenticationAPIs />
       <AppEntityAPIs />
-      <BotAPIs />
       <CalendarAPIs />
       <CallAPIs />
       <ChatAPIs />
@@ -119,6 +119,7 @@ const App = (): ReactElement => {
       <MediaAPIs />
       <MeetingAPIs />
       <MeetingRoomAPIs />
+      <MenusAPIs />
       <MonetizationAPIs />
       <NotificationAPIs />
       <PagesAPIs />
@@ -130,6 +131,7 @@ const App = (): ReactElement => {
       <PrivateAPIs />
       <RemoteCameraAPIs />
       <SharingAPIs />
+      <StageViewAPIs />
       <TeamsCoreAPIs />
       <TeamsAPIs />
     </>

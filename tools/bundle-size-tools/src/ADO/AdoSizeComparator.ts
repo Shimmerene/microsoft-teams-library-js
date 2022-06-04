@@ -110,7 +110,7 @@ export class ADOSizeComparator {
 
       // Baseline build does not have id
       if (baselineBuild.id === undefined) {
-        const message = `Baseline build does not have a build id`;
+        const message = 'Baseline build does not have a build id';
         console.log(message);
         return { message, comparison: undefined };
       }
@@ -128,7 +128,8 @@ export class ADOSizeComparator {
       }
 
       // Baseline build failed
-      if (baselineBuild.result !== BuildResult.Succeeded) {
+      // TODO (erinha): When the CG task stops failing on the CI builds, remove the comparison with PartiallySucceeded build result
+      if (baselineBuild.result !== BuildResult.Succeeded && baselineBuild.result !== BuildResult.PartiallySucceeded) {
         const message = getSimpleComment(
           'Baseline CI build failed, cannot generate bundle analysis at this time',
           baselineCommit,

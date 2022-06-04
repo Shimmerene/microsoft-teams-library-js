@@ -1,6 +1,9 @@
 import { logs } from '../../src/private/logs';
-import { Utils } from '../utils';
+import { FrameContexts } from '../../src/public';
 import { app } from '../../src/public/app';
+import { errorNotSupportedOnPlatform } from '../../src/public/constants';
+import { _minRuntimeConfigToUninitialize } from '../../src/public/runtime';
+import { Utils } from '../utils';
 
 describe('logs', () => {
   // Use to send a mock message from the app.
@@ -16,12 +19,14 @@ describe('logs', () => {
   afterEach(() => {
     // Reset the object since it's a singleton
     if (app._uninitialize) {
+      utils.setRuntimeConfig(_minRuntimeConfigToUninitialize);
+
       app._uninitialize();
     }
   });
 
-  describe('registerGetLogHandler', () => {
-    it('should not allow calls before initialization', () => {
+  describe('Testing logs.registerGetLogHandler function', () => {
+    it('logs.registerGetLogHandler should not allow calls before initialization', () => {
       expect(() =>
         logs.registerGetLogHandler(() => {
           return '';
@@ -29,45 +34,59 @@ describe('logs', () => {
       ).toThrowError('The library has not yet been initialized');
     });
 
-    it('should successfully register a get log handler', async () => {
-      await utils.initializeWithContext('content');
+    Object.values(FrameContexts).forEach(context => {
+      it('logs.registerGetLogHandler should throw error when logs is not supported.', async () => {
+        await utils.initializeWithContext(context);
+        expect.assertions(1);
+        utils.setRuntimeConfig({ apiVersion: 1, supports: {} });
 
-      let handlerInvoked = false;
-      logs.registerGetLogHandler(() => {
-        handlerInvoked = true;
-        return '';
+        try {
+          logs.registerGetLogHandler(() => '');
+        } catch (e) {
+          expect(e).toEqual(errorNotSupportedOnPlatform);
+        }
       });
 
-      utils.sendMessage('log.request');
+      it(`logs.registerGetLogHandler should successfully register a get log handler when initialized with ${context} content`, async () => {
+        await utils.initializeWithContext(context);
 
-      expect(handlerInvoked).toBe(true);
-    });
+        let handlerInvoked = false;
+        logs.registerGetLogHandler(() => {
+          handlerInvoked = true;
+          return '';
+        });
 
-    it('getLog should call the get log handler and send the log', async () => {
-      await utils.initializeWithContext('content');
+        utils.sendMessage('log.request');
 
-      let handlerInvoked = false;
-      const log: string = '1/1/2019 Info - App initialized';
-      logs.registerGetLogHandler(() => {
-        handlerInvoked = true;
-        return log;
+        expect(handlerInvoked).toBe(true);
       });
 
-      utils.sendMessage('log.request');
+      it(`logs.registerGetLogHandler should call the get log handler and send the log when initialized with ${context} content`, async () => {
+        await utils.initializeWithContext(context);
 
-      const sendLogMessage = utils.findMessageByFunc('log.receive');
-      expect(sendLogMessage).not.toBeNull();
-      expect(sendLogMessage.args).toEqual([log]);
-      expect(handlerInvoked).toBe(true);
-    });
+        let handlerInvoked = false;
+        const log: string = '1/1/2019 Info - App initialized';
+        logs.registerGetLogHandler(() => {
+          handlerInvoked = true;
+          return log;
+        });
 
-    it('should not send log when no get log handler is registered', async () => {
-      await utils.initializeWithContext('content');
+        utils.sendMessage('log.request');
 
-      utils.sendMessage('log.request');
+        const sendLogMessage = utils.findMessageByFunc('log.receive');
+        expect(sendLogMessage).not.toBeNull();
+        expect(sendLogMessage.args).toEqual([log]);
+        expect(handlerInvoked).toBe(true);
+      });
 
-      const sendLogMessage = utils.findMessageByFunc('log.receive');
-      expect(sendLogMessage).toBeNull();
+      it(`logs.registerGetLogHandler should not send log when no get log handler is registered when initialized with ${context} content`, async () => {
+        await utils.initializeWithContext(context);
+
+        utils.sendMessage('log.request');
+
+        const sendLogMessage = utils.findMessageByFunc('log.receive');
+        expect(sendLogMessage).toBeNull();
+      });
     });
   });
 });

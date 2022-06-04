@@ -1,16 +1,14 @@
 import { sendAndHandleSdkError as sendAndHandleError } from '../internal/communication';
 import { locationAPIsRequiredVersion } from '../internal/constants';
-import { ensureInitialized, isAPISupportedByPlatform } from '../internal/internalAPIs';
+import { ensureInitialized, isCurrentSDKVersionAtLeast } from '../internal/internalAPIs';
 import {
   callCallbackWithErrorOrBooleanFromPromiseAndReturnPromise,
   callCallbackWithErrorOrResultFromPromiseAndReturnPromise,
 } from '../internal/utils';
-import { FrameContexts } from './constants';
+import { errorNotSupportedOnPlatform, FrameContexts } from './constants';
 import { ErrorCode, SdkError } from './interfaces';
 import { runtime } from './runtime';
-/**
- * @alpha
- */
+
 export namespace location {
   export interface LocationProps {
     /**
@@ -56,7 +54,7 @@ export namespace location {
   export function getLocation(props: LocationProps): Promise<Location>;
   /**
    * @deprecated
-   * As of 2.0.0-beta.1, please use {@link location.getLocation location.getLocation(props: LocationProps): Promise\<Location\>} instead.
+   * As of 2.0.0, please use {@link location.getLocation location.getLocation(props: LocationProps): Promise\<Location\>} instead.
    * @param props {@link LocationProps} - Specifying how the location request is handled
    * @param callback - Callback to invoke when current user location is fetched
    */
@@ -66,16 +64,20 @@ export namespace location {
     callback?: (error: SdkError, location: Location) => void,
   ): Promise<Location> {
     ensureInitialized(FrameContexts.content, FrameContexts.task);
+
     return callCallbackWithErrorOrResultFromPromiseAndReturnPromise<Location>(getLocationHelper, callback, props);
   }
 
   function getLocationHelper(props: LocationProps): Promise<Location> {
     return new Promise<Location>(resolve => {
-      if (!isAPISupportedByPlatform(locationAPIsRequiredVersion)) {
+      if (!isCurrentSDKVersionAtLeast(locationAPIsRequiredVersion)) {
         throw { errorCode: ErrorCode.OLD_PLATFORM };
       }
       if (!props) {
         throw { errorCode: ErrorCode.INVALID_ARGUMENTS };
+      }
+      if (!isSupported()) {
+        throw errorNotSupportedOnPlatform;
       }
       resolve(sendAndHandleError('location.getLocation', props));
     });
@@ -90,7 +92,7 @@ export namespace location {
   export function showLocation(location: Location): Promise<void>;
   /**
    * @deprecated
-   * As of 2.0.0-beta.1, please use {@link location.showLocation location.showLocation(location: Location): Promise\<void\>} instead.
+   * As of 2.0.0, please use {@link location.showLocation location.showLocation(location: Location): Promise\<void\>} instead.
    * Shows the location on map corresponding to the given coordinates
    * @param location {@link Location} - which needs to be shown on map
    * @param callback - Callback to invoke when the location is opened on map
@@ -106,11 +108,14 @@ export namespace location {
 
   export function showLocationHelper(location: Location): Promise<void> {
     return new Promise<void>(resolve => {
-      if (!isAPISupportedByPlatform(locationAPIsRequiredVersion)) {
+      if (!isCurrentSDKVersionAtLeast(locationAPIsRequiredVersion)) {
         throw { errorCode: ErrorCode.OLD_PLATFORM };
       }
       if (!location) {
         throw { errorCode: ErrorCode.INVALID_ARGUMENTS };
+      }
+      if (!isSupported()) {
+        throw errorNotSupportedOnPlatform;
       }
       resolve(sendAndHandleError('location.showLocation', location));
     });

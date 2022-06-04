@@ -1,11 +1,10 @@
 import { sendMessageToParent } from '../internal/communication';
+import { sendAndHandleSdkError as sendAndHandleError } from '../internal/communication';
+import { createTeamsDeepLinkForCall } from '../internal/deepLinkUtilities';
 import { ensureInitialized } from '../internal/internalAPIs';
 import { FrameContexts } from './constants';
 import { runtime } from './runtime';
 
-/**
- * @alpha
- */
 export namespace call {
   export enum CallModalities {
     Unknown = 'unknown',
@@ -16,14 +15,22 @@ export namespace call {
   }
 
   export interface StartCallParams {
-    // comma-separated list of user IDs representing the participants of the call.
-    // Currently the User ID field supports the Azure AD UserPrincipalName,
-    // typically an email address, or in case of a PSTN call, it supports a pstn
-    // mri 4:<phonenumber>.
+    /**
+     * Comma-separated list of user IDs representing the participants of the call.
+     *
+     * @remarks
+     * Currently the User ID field supports the Azure AD UserPrincipalName,
+     * typically an email address, or in case of a PSTN call, it supports a pstn
+     * mri 4:<phonenumber>.
+     */
     targets: string[];
-    // List of modalities for the call. Defaults to [“audio”].
+    /**
+     * List of modalities for the call. Defaults to [“audio”].
+     */
     requestedModalities?: CallModalities[];
-    // An optional parameter that informs about the source of the deep link
+    /**
+     * An optional parameter that informs about the source of the deep link
+     */
     source?: string;
   }
 
@@ -37,9 +44,22 @@ export namespace call {
     return new Promise(resolve => {
       ensureInitialized(FrameContexts.content);
       if (!isSupported()) {
-        throw 'Not supported';
+        throw new Error('Not supported');
       }
-      return sendMessageToParent('call.startCall', [startCallParams], resolve);
+      if (runtime.isLegacyTeams) {
+        resolve(
+          sendAndHandleError(
+            'executeDeepLink',
+            createTeamsDeepLinkForCall(
+              startCallParams.targets,
+              startCallParams.requestedModalities?.includes(CallModalities.Video),
+              startCallParams.source,
+            ),
+          ),
+        );
+      } else {
+        return sendMessageToParent('call.startCall', [startCallParams], resolve);
+      }
     });
   }
 

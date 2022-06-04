@@ -1,25 +1,89 @@
-import { media } from '@microsoft/teams-js';
+import { media, SdkError } from '@microsoft/teams-js';
 import React, { ReactElement } from 'react';
 
 import { noHostSdkMsg } from '../App';
 import { ApiWithoutInput, ApiWithTextInput } from './utils';
 
+const mediaHelper = (item: string): string => {
+  let output = '';
+  let len = 20;
+  if (item) {
+    len = Math.min(len, item.length);
+    output = item.substr(0, len);
+  }
+  return output;
+};
+
+const captureImageHelper = (file: media.File): string => {
+  const content = mediaHelper(file.content);
+  const output =
+    'format: ' + file.format + ', size: ' + file.size + ', mimeType: ' + file.mimeType + ', content: ' + content;
+
+  return output;
+};
+
+const selectMediaHelper = (medias: media.Media[]): string => {
+  let message = '';
+  for (let i = 0; i < medias.length; i++) {
+    const media: media.Media = medias[i];
+    const preview = mediaHelper(media.preview);
+    message +=
+      '[format: ' +
+      media.format +
+      ', size: ' +
+      media.size +
+      ', mimeType: ' +
+      media.mimeType +
+      ', content: ' +
+      media.content +
+      ', preview: ' +
+      preview +
+      '],';
+  }
+  return message;
+};
+
+const getMediaHelper = (blob: Blob, setResult: (result: string) => void): void => {
+  const reader = new FileReader();
+  reader.readAsDataURL(blob);
+  reader.onloadend = () => {
+    if (reader.result) {
+      // eslint-disable-next-line  @typescript-eslint/no-explicit-any
+      setResult('Received Blob (length: ' + (reader.result as any).length + ')');
+    }
+  };
+};
+
+const getUrlListFromId = (medias: media.Media[]): media.ImageUri[] => {
+  const urlList: media.ImageUri[] = [];
+  for (let i = 0; i < medias.length; i++) {
+    const media = medias[i];
+    urlList.push({
+      value: media.content,
+      type: 1, //ImageUriType.ID
+    } as media.ImageUri);
+  }
+
+  return urlList;
+};
+
 const CaptureImage = (): React.ReactElement =>
   ApiWithoutInput({
     name: 'CaptureImage',
     title: 'Capture Image',
-    onClick: async () => {
-      const result = await media.captureImage();
-      const file: media.File = result[0];
-      let content = '';
-      let len = 20;
-      if (file.content) {
-        len = Math.min(len, file.content.length);
-        content = file.content.substr(0, len);
-      }
-      const output =
-        'format: ' + file.format + ', size: ' + file.size + ', mimeType: ' + file.mimeType + ', content: ' + content;
-      return output;
+    onClick: async setResult => {
+      const callback = (error?: SdkError, files?: media.File[]): void => {
+        if (error) {
+          setResult(JSON.stringify(error));
+        } else if (files) {
+          const output = captureImageHelper(files[0]);
+          setResult(output);
+        } else {
+          setResult('Unsuccessful capture');
+        }
+      };
+      media.captureImage(callback);
+      return '';
     },
   });
 
@@ -33,31 +97,17 @@ const SelectMedia = (): React.ReactElement =>
           throw new Error('mediaType and maxMediaCount are required');
         }
       },
-      submit: async input => {
-        const medias = await media.selectMedia(input);
-        let message = '';
-        for (let i = 0; i < medias.length; i++) {
-          const media: media.Media = medias[i];
-          let preview = '';
-          let len = 20;
-          if (media.preview) {
-            len = Math.min(len, media.preview.length);
-            preview = media.preview.substr(0, len);
+      submit: async (input, setResult) => {
+        const callback = (error: SdkError, medias: media.Media[]): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            const output = selectMediaHelper(medias);
+            setResult(output);
           }
-          message +=
-            '[format: ' +
-            media.format +
-            ', size: ' +
-            media.size +
-            ', mimeType: ' +
-            media.mimeType +
-            ', content: ' +
-            media.content +
-            ', preview: ' +
-            preview +
-            '],';
-        }
-        return message;
+        };
+        media.selectMedia(input, callback);
+        return '';
       },
     },
   });
@@ -70,17 +120,22 @@ const GetMedia = (): React.ReactElement =>
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       validateInput: () => {},
       submit: async (input, setResult) => {
-        const medias = await media.selectMedia(input);
-        const mediaItem: media.Media = medias[0] as media.Media;
-        const blob = await mediaItem.getMedia();
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => {
-          if (reader.result) {
-            // eslint-disable-next-line  @typescript-eslint/no-explicit-any
-            setResult('Received Blob (length: ' + (reader.result as any).length + ')');
+        const getMediaCallback = (error: SdkError, blob: Blob): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            getMediaHelper(blob, setResult);
           }
         };
+        const selectMediaCallback = (error: SdkError, medias: media.Media[]): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            const mediaItem: media.Media = medias[0] as media.Media;
+            mediaItem.getMedia(getMediaCallback);
+          }
+        };
+        media.selectMedia(input, selectMediaCallback);
         return 'media.getMedia()' + noHostSdkMsg;
       },
     },
@@ -96,19 +151,24 @@ const ViewImagesWithId = (): React.ReactElement =>
           throw new Error('mediaType and maxMediaCount are required');
         }
       },
-      submit: async input => {
-        const medias = await media.selectMedia(input);
-
-        const urlList: media.ImageUri[] = [];
-        for (let i = 0; i < medias.length; i++) {
-          const media = medias[i];
-          urlList.push({
-            value: media.content,
-            type: 1, //ImageUriType.ID
-          } as media.ImageUri);
-        }
-        await media.viewImages(urlList);
-        return 'Success';
+      submit: async (input, setResult) => {
+        const viewImageCallback = (error?: SdkError): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            setResult('Success');
+          }
+        };
+        const selectMediaCallback = (error: SdkError, medias: media.Media[]): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            const urlList: media.ImageUri[] = getUrlListFromId(medias);
+            media.viewImages(urlList, viewImageCallback);
+          }
+        };
+        media.selectMedia(input, selectMediaCallback);
+        return '';
       },
     },
   });
@@ -117,9 +177,20 @@ const ScanBarCode = (): ReactElement =>
   ApiWithTextInput<media.BarCodeConfig>({
     name: 'mediaScanBarCode',
     title: 'Media Scan Bar Code',
-    onClick: async input => {
-      const result = await media.scanBarCode(input);
-      return 'result: ' + result;
+    onClick: {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      validateInput: () => {},
+      submit: async (input, setResult) => {
+        const callback = (error: SdkError, result: string): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            setResult('result: ' + result);
+          }
+        };
+        media.scanBarCode(callback, input);
+        return '';
+      },
     },
   });
 
@@ -133,19 +204,19 @@ const ViewImagesWithUrls = (): React.ReactElement =>
           throw new Error('input has to be an array of strings with at least one element');
         }
       },
-      submit: async input => {
+      submit: async (input, setResult) => {
+        const callback = (error?: SdkError): void => {
+          if (error) {
+            setResult(JSON.stringify(error));
+          } else {
+            setResult('media.viewImagesWithUrls() executed');
+          }
+        };
         const urlList: media.ImageUri[] = input.map(x => ({ value: x, type: 2 /* ImageUriType.ID */ }));
-        await media.viewImages(urlList);
-        return 'media.viewImagesWithUrls() executed';
+        media.viewImages(urlList, callback);
+        return '';
       },
     },
-  });
-
-const CheckMediaCapability = (): React.ReactElement =>
-  ApiWithoutInput({
-    name: 'checkMediaCapability',
-    title: 'Check Media Call',
-    onClick: async () => `Media module ${media.isSupported() ? 'is' : 'is not'} supported`,
   });
 
 const MediaAPIs = (): ReactElement => (
@@ -157,7 +228,6 @@ const MediaAPIs = (): ReactElement => (
     <ViewImagesWithId />
     <ViewImagesWithUrls />
     <ScanBarCode />
-    <CheckMediaCapability />
   </>
 );
 

@@ -2,6 +2,7 @@ import { GlobalVars } from '../../src/internal/globalVars';
 import { FrameContexts } from '../../src/public';
 import { app } from '../../src/public/app';
 import { mail } from '../../src/public/mail';
+import { _minRuntimeConfigToUninitialize } from '../../src/public/runtime';
 import { Utils } from '../utils';
 
 const dataError = 'Something went wrong...';
@@ -24,6 +25,7 @@ describe('mail', () => {
   afterEach(() => {
     // Reset the object since it's a singleton
     if (app._uninitialize) {
+      utils.setRuntimeConfig(_minRuntimeConfigToUninitialize);
       app._uninitialize();
     }
   });
@@ -68,7 +70,7 @@ describe('mail', () => {
       await utils.initializeWithContext('content');
       utils.setRuntimeConfig({ apiVersion: 1, supports: {} });
 
-      await mail.openMailItem(openMailItemParams).catch(e => expect(e).toBe('Not Supported'));
+      await expect(mail.openMailItem(openMailItemParams)).rejects.toThrowError('Not supported');
     });
 
     it('should throw if a null itemId is supplied', async () => {
@@ -153,7 +155,7 @@ describe('mail', () => {
 
       utils.respondToMessage(openMailItemMessage, data.success);
 
-      expect(promise).resolves;
+      await expect(promise).resolves.not.toThrow();
     });
   });
 
@@ -199,7 +201,7 @@ describe('mail', () => {
       await utils.initializeWithContext('content');
       utils.setRuntimeConfig({ apiVersion: 1, supports: {} });
 
-      await mail.composeMail(composeMailParams).catch(e => expect(e).toBe('Not Supported'));
+      await expect(mail.composeMail(composeMailParams)).rejects.toThrowError('Not supported');
     });
 
     it('should successfully throw if the composeMail message sends and fails', async () => {
@@ -254,7 +256,7 @@ describe('mail', () => {
       };
 
       utils.respondToMessage(composeMailMessage, data.success);
-      expect(promise).resolves;
+      await expect(promise).resolves.not.toThrow();
     });
   });
 

@@ -1,20 +1,13 @@
-import {
-  sendAndHandleSdkError as sendAndHandleError,
-  sendMessageToParent,
-  sendMessageToParentAsync,
-} from '../internal/communication';
+import { sendMessageToParent } from '../internal/communication';
+import { registerHandler } from '../internal/handlers';
 import { ensureInitialized } from '../internal/internalAPIs';
-import { FileOpenPreference, FrameContexts, SdkError } from '../public';
-import { runtime } from '../public/runtime';
-import { FilePreviewParameters } from './interfaces';
+import { ErrorCode, FileOpenPreference, FrameContexts, SdkError } from '../public';
 
 /**
  * @hidden
  * Hide from docs
  * ------
  * Namespace to interact with the files specific part of the SDK.
- *
- * @alpha
  */
 export namespace files {
   /**
@@ -77,6 +70,7 @@ export namespace files {
    * @hidden
    * Hide from docs
    * ------
+   *
    * Cloud storage folder interface
    */
   export interface CloudStorageFolder {
@@ -136,6 +130,7 @@ export namespace files {
    * @hidden
    * Hide from docs
    * ------
+   *
    * Cloud storage item interface
    */
   export interface CloudStorageFolderItem {
@@ -256,21 +251,140 @@ export namespace files {
   /**
    * @hidden
    * Hide from docs
-   * ------
-   * Gets a list of cloud storage folders added to the channel
    *
-   * @param channelId - ID of the channel whose cloud storage folders should be retrieved
+   * Download status enum
    */
-  export function getCloudStorageFolders(channelId: string): Promise<CloudStorageFolder[]> {
-    return new Promise<CloudStorageFolder[]>(resolve => {
-      ensureInitialized(FrameContexts.content);
+  export enum FileDownloadStatus {
+    Downloaded = 'Downloaded',
+    Downloading = 'Downloading',
+    Failed = 'Failed',
+  }
 
-      if (!channelId || channelId.length === 0) {
-        throw new Error('[files.getCloudStorageFolders] channelId name cannot be null or empty');
-      }
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Download Files interface
+   */
+  export interface IFileItem {
+    /**
+     * ID of the file metadata
+     */
+    objectId?: string;
+    /**
+     * Path of the file
+     */
+    path?: string;
+    /**
+     * Size of the file in bytes
+     */
+    sizeInBytes?: number;
+    /**
+     * Download status
+     */
+    status?: FileDownloadStatus;
+    /**
+     * Download timestamp
+     */
+    timestamp: Date;
+    /**
+     * File name
+     */
+    title: string;
+    /**
+     * Type of file i.e. the file extension.
+     */
+    extension: string;
+  }
 
-      resolve(sendAndHandleError('files.getCloudStorageFolders', channelId));
-    });
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Actions specific to 3P cloud storage provider file and / or account
+   */
+  export enum CloudStorageProviderFileAction {
+    Download = 'DOWNLOAD',
+    Upload = 'UPLOAD',
+    Delete = 'DELETE',
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Interface for 3P cloud storage provider request content type
+   */
+  export interface CloudStorageProviderRequest<T> {
+    content: T;
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Base interface for 3P cloud storage provider action request content
+   */
+  export interface CloudStorageProviderContent {
+    providerCode: CloudStorageProvider;
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Interface representing 3P cloud storage provider add new file action.
+   * The file extension represents type of file e.g. docx, pptx etc. and need not be prefixed with dot(.)
+   */
+  export interface CloudStorageProviderNewFileContent extends CloudStorageProviderContent {
+    newFileName: string;
+    newFileExtension: string;
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Interface representing 3P cloud storage provider rename existing file action
+   */
+  export interface CloudStorageProviderRenameFileContent extends CloudStorageProviderContent {
+    existingFile: CloudStorageFolderItem | ISharePointFile;
+    newFile: CloudStorageFolderItem | ISharePointFile;
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Interface representing 3P cloud storage provider actions like Upload / Download / Delete file(s)
+   */
+  export interface CloudStorageProviderActionContent extends CloudStorageProviderContent {
+    action: CloudStorageProviderFileAction;
+    itemList: CloudStorageFolderItem[] | ISharePointFile[];
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Gets a list of cloud storage folders added to the channel
+   * @param channelId - ID of the channel whose cloud storage folders should be retrieved
+   * @param callback - Callback that will be triggered post folders load
+   */
+  export function getCloudStorageFolders(
+    channelId: string,
+    callback: (error: SdkError, folders: CloudStorageFolder[]) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!channelId || channelId.length === 0) {
+      throw new Error('[files.getCloudStorageFolders] channelId name cannot be null or empty');
+    }
+    if (!callback) {
+      throw new Error('[files.getCloudStorageFolders] Callback cannot be null');
+    }
+
+    sendMessageToParent('files.getCloudStorageFolders', [channelId], callback);
   }
 
   /**
@@ -278,83 +392,96 @@ export namespace files {
    * Hide from docs
    * ------
    * Initiates the add cloud storage folder flow
+   *
    * @param channelId - ID of the channel to add cloud storage folder
+   * @param callback - Callback that will be triggered post add folder flow is compelete
    */
-  export function addCloudStorageFolder(channelId: string): Promise<[boolean, CloudStorageFolder[]]> {
-    return new Promise<[SdkError, boolean, CloudStorageFolder[]]>(resolve => {
-      ensureInitialized(FrameContexts.content);
+  export function addCloudStorageFolder(
+    channelId: string,
+    callback: (error: SdkError, isFolderAdded: boolean, folders: CloudStorageFolder[]) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
 
-      if (!channelId || channelId.length === 0) {
-        throw new Error('[files.addCloudStorageFolder] channelId name cannot be null or empty');
-      }
+    if (!channelId || channelId.length === 0) {
+      throw new Error('[files.addCloudStorageFolder] channelId name cannot be null or empty');
+    }
+    if (!callback) {
+      throw new Error('[files.addCloudStorageFolder] Callback cannot be null');
+    }
 
-      resolve(sendMessageToParentAsync('files.addCloudStorageFolder', [channelId]));
-    }).then(([error, isFolderAdded, folders]: [SdkError, boolean, CloudStorageFolder[]]) => {
-      if (error) {
-        throw error;
-      }
-      const result: [boolean, CloudStorageFolder[]] = [isFolderAdded, folders];
-      return result;
-    });
+    sendMessageToParent('files.addCloudStorageFolder', [channelId], callback);
   }
 
   /**
    * @hidden
    * Hide from docs
    * ------
+   *
    * Deletes a cloud storage folder from channel
    *
    * @param channelId - ID of the channel where folder is to be deleted
    * @param folderToDelete - cloud storage folder to be deleted
+   * @param callback - Callback that will be triggered post delete
    */
-  export function deleteCloudStorageFolder(channelId: string, folderToDelete: CloudStorageFolder): Promise<boolean> {
-    return new Promise<boolean>(resolve => {
-      ensureInitialized(FrameContexts.content);
+  export function deleteCloudStorageFolder(
+    channelId: string,
+    folderToDelete: CloudStorageFolder,
+    callback: (error: SdkError, isFolderDeleted: boolean) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
 
-      if (!channelId) {
-        throw new Error('[files.deleteCloudStorageFolder] channelId name cannot be null or empty');
-      }
-      if (!folderToDelete) {
-        throw new Error('[files.deleteCloudStorageFolder] folderToDelete cannot be null or empty');
-      }
+    if (!channelId) {
+      throw new Error('[files.deleteCloudStorageFolder] channelId name cannot be null or empty');
+    }
+    if (!folderToDelete) {
+      throw new Error('[files.deleteCloudStorageFolder] folderToDelete cannot be null or empty');
+    }
+    if (!callback) {
+      throw new Error('[files.deleteCloudStorageFolder] Callback cannot be null');
+    }
 
-      resolve(sendAndHandleError('files.deleteCloudStorageFolder', channelId, folderToDelete));
-    });
+    sendMessageToParent('files.deleteCloudStorageFolder', [channelId, folderToDelete], callback);
   }
 
   /**
    * @hidden
    * Hide from docs
    * ------
+   *
    * Fetches the contents of a Cloud storage folder (CloudStorageFolder) / sub directory
    *
    * @param folder - Cloud storage folder (CloudStorageFolder) / sub directory (CloudStorageFolderItem)
    * @param providerCode - Code of the cloud storage folder provider
+   * @param callback - Callback that will be triggered post contents are loaded
    */
   export function getCloudStorageFolderContents(
     folder: CloudStorageFolder | CloudStorageFolderItem,
     providerCode: CloudStorageProvider,
-  ): Promise<CloudStorageFolderItem[]> {
-    return new Promise<CloudStorageFolderItem[]>(resolve => {
-      ensureInitialized(FrameContexts.content);
+    callback: (error: SdkError, items: CloudStorageFolderItem[]) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
 
-      if (!folder || !providerCode) {
-        throw new Error('[files.getCloudStorageFolderContents] folder/providerCode name cannot be null or empty');
-      }
+    if (!folder || !providerCode) {
+      throw new Error('[files.getCloudStorageFolderContents] folder/providerCode name cannot be null or empty');
+    }
 
-      if ('isSubdirectory' in folder && !folder.isSubdirectory) {
-        throw new Error('[files.getCloudStorageFolderContents] provided folder is not a subDirectory');
-      }
+    if (!callback) {
+      throw new Error('[files.getCloudStorageFolderContents] Callback cannot be null');
+    }
 
-      resolve(sendAndHandleError('files.getCloudStorageFolderContents', folder, providerCode));
-    });
+    if ('isSubdirectory' in folder && !folder.isSubdirectory) {
+      throw new Error('[files.getCloudStorageFolderContents] provided folder is not a subDirectory');
+    }
+
+    sendMessageToParent('files.getCloudStorageFolderContents', [folder, providerCode], callback);
   }
 
   /**
    * @hidden
    * Hide from docs
    * ------
-   * Open a cloud storage file in teams
+   *
+   * Open a cloud storage file in Teams
    *
    * @param file - cloud storage file that should be opened
    * @param providerCode - Code of the cloud storage folder provider
@@ -380,48 +507,22 @@ export namespace files {
 
   /**
    * @hidden
-   * Hide from docs.
-   * ------
-   * Opens a client-friendly preview of the specified file.
-   *
-   * @param file - The file to preview.
-   */
-  export function openFilePreview(filePreviewParameters: FilePreviewParameters): void {
-    ensureInitialized(FrameContexts.content);
-
-    const params = [
-      filePreviewParameters.entityId,
-      filePreviewParameters.title,
-      filePreviewParameters.description,
-      filePreviewParameters.type,
-      filePreviewParameters.objectUrl,
-      filePreviewParameters.downloadUrl,
-      filePreviewParameters.webPreviewUrl,
-      filePreviewParameters.webEditUrl,
-      filePreviewParameters.baseUrl,
-      filePreviewParameters.editFile,
-      filePreviewParameters.subEntityId,
-      filePreviewParameters.viewerAction,
-      filePreviewParameters.fileOpenPreference,
-      filePreviewParameters.conversationId,
-    ];
-
-    sendMessageToParent('openFilePreview', params);
-  }
-
-  /**
-   * @hidden
    * Allow 1st party apps to call this function to get the external
    * third party cloud storage accounts that the tenant supports
    * @param excludeAddedProviders: return a list of support third party
    * cloud storages that hasn't been added yet.
    */
-  export function getExternalProviders(excludeAddedProviders = false): Promise<IExternalProvider[]> {
-    return new Promise<IExternalProvider[]>(resolve => {
-      ensureInitialized(FrameContexts.content);
+  export function getExternalProviders(
+    excludeAddedProviders = false,
+    callback: (error: SdkError, providers: IExternalProvider[]) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
 
-      resolve(sendAndHandleError('files.getExternalProviders', excludeAddedProviders));
-    });
+    if (!callback) {
+      throw new Error('[files.getExternalProviders] Callback cannot be null');
+    }
+
+    sendMessageToParent('files.getExternalProviders', [excludeAddedProviders], callback);
   }
 
   /**
@@ -435,36 +536,261 @@ export namespace files {
     destinationFolder: CloudStorageFolderItem | ISharePointFile,
     destinationProviderCode: CloudStorageProvider,
     isMove = false,
-  ): Promise<void> {
-    return new Promise<void>(resolve => {
-      ensureInitialized(FrameContexts.content);
-      if (!selectedFiles || selectedFiles.length === 0) {
-        throw new Error('[files.copyMoveFiles] selectedFiles cannot be null or empty');
-      }
-      if (!providerCode) {
-        throw new Error('[files.copyMoveFiles] providerCode cannot be null or empty');
-      }
-      if (!destinationFolder) {
-        throw new Error('[files.copyMoveFiles] destinationFolder cannot be null or empty');
-      }
-      if (!destinationProviderCode) {
-        throw new Error('[files.copyMoveFiles] destinationProviderCode cannot be null or empty');
-      }
-
-      resolve(
-        sendAndHandleError(
-          'files.copyMoveFiles',
-          selectedFiles,
-          providerCode,
-          destinationFolder,
-          destinationProviderCode,
-          isMove,
-        ),
-      );
-    });
+    callback: (error?: SdkError) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
+    if (!selectedFiles || selectedFiles.length === 0) {
+      throw new Error('[files.copyMoveFiles] selectedFiles cannot be null or empty');
+    }
+    if (!providerCode) {
+      throw new Error('[files.copyMoveFiles] providerCode cannot be null or empty');
+    }
+    if (!destinationFolder) {
+      throw new Error('[files.copyMoveFiles] destinationFolder cannot be null or empty');
+    }
+    if (!destinationProviderCode) {
+      throw new Error('[files.copyMoveFiles] destinationProviderCode cannot be null or empty');
+    }
+    if (!callback) {
+      throw new Error('[files.copyMoveFiles] callback cannot be null');
+    }
+    sendMessageToParent(
+      'files.copyMoveFiles',
+      [selectedFiles, providerCode, destinationFolder, destinationProviderCode, isMove],
+      callback,
+    );
   }
 
-  export function isSupported(): boolean {
-    return runtime.supports.files ? true : false;
+  /**
+   * @hidden
+   * Hide from docs
+   *  ------
+   *
+   * Gets list of downloads for current user
+   * @param callback Callback that will be triggered post downloads load
+   */
+  export function getFileDownloads(callback: (error?: SdkError, files?: IFileItem[]) => void): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw new Error('[files.getFileDownloads] Callback cannot be null');
+    }
+
+    sendMessageToParent('files.getFileDownloads', [], callback);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Open download preference folder if fileObjectId value is undefined else open folder containing the file with id fileObjectId
+   * @param fileObjectId - Id of the file whose containing folder should be opened
+   * @param callback Callback that will be triggered post open download folder/path
+   */
+  export function openDownloadFolder(fileObjectId: string = undefined, callback: (error?: SdkError) => void): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw new Error('[files.openDownloadFolder] Callback cannot be null');
+    }
+
+    sendMessageToParent('files.openDownloadFolder', [fileObjectId], callback);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Initiates add 3P cloud storage provider flow, where a pop up window opens for user to select required
+   * 3P provider from the configured policy supported 3P provider list, following which user authentication
+   * for selected 3P provider is performed on success of which the selected 3P provider support is added for user
+   *
+   * @param callback Callback that will be triggered post add 3P cloud storage provider action
+   */
+  export function addCloudStorageProvider(callback: (error?: SdkError) => void): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw getSdkError(ErrorCode.INVALID_ARGUMENTS, '[files.addCloudStorageProvider] callback cannot be null');
+    }
+
+    sendMessageToParent('files.addCloudStorageProvider', [], callback);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Initiates signout of 3P cloud storage provider flow, which will remove the selected
+   * 3P cloud storage provider from the list of added providers. No other user input and / or action
+   * is required except the 3P cloud storage provider to signout from
+   *
+   * @param logoutRequest 3P cloud storage provider remove action request content
+   * @param callback Callback that will be triggered post signout of 3P cloud storage provider action
+   */
+  export function removeCloudStorageProvider(
+    logoutRequest: CloudStorageProviderRequest<CloudStorageProviderContent>,
+    callback: (error?: SdkError) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw getSdkError(ErrorCode.INVALID_ARGUMENTS, '[files.removeCloudStorageProvider] callback cannot be null');
+    }
+
+    if (!(logoutRequest && logoutRequest.content)) {
+      throw getSdkError(
+        ErrorCode.INVALID_ARGUMENTS,
+        '[files.removeCloudStorageProvider] 3P cloud storage provider request content is missing',
+      );
+    }
+
+    sendMessageToParent('files.removeCloudStorageProvider', [logoutRequest], callback);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Initiates the add 3P cloud storage file flow, which will add a new file for the given 3P provider
+   *
+   * @param addNewFileRequest 3P cloud storage provider add action request content
+   * @param callback Callback that will be triggered post adding a new file flow is finished
+   */
+  export function addCloudStorageProviderFile(
+    addNewFileRequest: CloudStorageProviderRequest<CloudStorageProviderNewFileContent>,
+    callback: (error?: SdkError) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw getSdkError(ErrorCode.INVALID_ARGUMENTS, '[files.addCloudStorageProviderFile] callback cannot be null');
+    }
+
+    if (!(addNewFileRequest && addNewFileRequest.content)) {
+      throw getSdkError(
+        ErrorCode.INVALID_ARGUMENTS,
+        '[files.addCloudStorageProviderFile] 3P cloud storage provider request content is missing',
+      );
+    }
+
+    sendMessageToParent('files.addCloudStorageProviderFile', [addNewFileRequest], callback);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Initiates the rename 3P cloud storage file flow, which will rename an existing file in the given 3P provider
+   *
+   * @param renameFileRequest 3P cloud storage provider rename action request content
+   * @param callback Callback that will be triggered post renaming an existing file flow is finished
+   */
+  export function renameCloudStorageProviderFile(
+    renameFileRequest: CloudStorageProviderRequest<CloudStorageProviderRenameFileContent>,
+    callback: (error?: SdkError) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw getSdkError(ErrorCode.INVALID_ARGUMENTS, '[files.renameCloudStorageProviderFile] callback cannot be null');
+    }
+
+    if (!(renameFileRequest && renameFileRequest.content)) {
+      throw getSdkError(
+        ErrorCode.INVALID_ARGUMENTS,
+        '[files.renameCloudStorageProviderFile] 3P cloud storage provider request content is missing',
+      );
+    }
+
+    sendMessageToParent('files.renameCloudStorageProviderFile', [renameFileRequest], callback);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Initiates the 3P cloud storage provider file action (Upload / Download / Delete) flow
+   *
+   * Upload Action : Allows uploading file(s) to the given 3P cloud storage provider
+   * Download Action : Allows downloading file(s) from the given 3P cloud storage provider
+   * Delete Action : Allows deleting file(s) from the given 3P cloud storage provider
+   *
+   * @param cloudStorageProviderFileActionRequest 3P cloud storage provider file action (Upload / Download / Delete) request content
+   * @param callback Callback that will be triggered post 3P cloud storage action
+   */
+  export function performCloudStorageProviderFileAction(
+    cloudStorageProviderFileActionRequest: CloudStorageProviderRequest<CloudStorageProviderActionContent>,
+    callback: (error?: SdkError) => void,
+  ): void {
+    ensureInitialized(FrameContexts.content);
+
+    if (!callback) {
+      throw getSdkError(
+        ErrorCode.INVALID_ARGUMENTS,
+        '[files.performCloudStorageProviderFileAction] callback cannot be null',
+      );
+    }
+
+    if (!(cloudStorageProviderFileActionRequest && cloudStorageProviderFileActionRequest.content)) {
+      throw getSdkError(
+        ErrorCode.INVALID_ARGUMENTS,
+        '[files.performCloudStorageProviderFileAction] 3P cloud storage provider request content is missing',
+      );
+    }
+
+    sendMessageToParent(
+      'files.performCloudStorageProviderFileAction',
+      [cloudStorageProviderFileActionRequest],
+      callback,
+    );
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Register a handler to be called when a user's 3P cloud storage provider list changes i.e.
+   * post adding / removing a 3P provider, list is updated
+   *
+   * @param handler - When 3P cloud storage provider list is updated this handler is called
+   *
+   */
+  export function registerCloudStorageProviderListChangeHandler(handler: () => void): void {
+    ensureInitialized();
+
+    if (!handler) {
+      throw new Error('[registerCloudStorageProviderListChangeHandler] Handler cannot be null');
+    }
+
+    registerHandler('files.cloudStorageProviderList', handler);
+  }
+
+  /**
+   * @hidden
+   * Hide from docs
+   *
+   * Register a handler to be called when a user's 3P cloud storage provider content changes i.e.
+   * when file(s) is/are added / renamed / deleted / uploaded, the list of files is updated
+   *
+   * @param handler - When 3P cloud storage provider content is updated this handler is called
+   *
+   */
+  export function registerCloudStorageProviderContentChangeHandler(handler: () => void): void {
+    ensureInitialized();
+
+    if (!handler) {
+      throw new Error('[registerCloudStorageProviderContentChangeHandler] Handler cannot be null');
+    }
+
+    registerHandler('files.cloudStorageProviderContent', handler);
+  }
+
+  function getSdkError(errorCode: ErrorCode, message: string): SdkError {
+    const sdkError: SdkError = {
+      errorCode: errorCode,
+      message: message,
+    };
+    return sdkError;
   }
 }
